@@ -45,7 +45,7 @@ export async function implementDnsmasqImport() {
     const dnsmasqConfPath = await resolveDnsmasqConfPath();
     const current = await readFileContent(dnsmasqConfPath);
 
-    const importLine = `conf-dir=${ensureTrailingSlash(dnsmasqDir())},*.conf`;
+    const importLine = `hostsdir=${ensureTrailingSlash(dnsmasqDir())},*.conf`;
 
     const exists = current
         .split("\n")
@@ -63,16 +63,6 @@ export async function implementDnsmasqImport() {
     ].join("\n");
 
     await writeFileSudoIfNeeded(dnsmasqConfPath, next);
-}
-
-/**
- * Reload dnsmasq and flush macOS DNS cache so new domains are immediately available.
- */
-export async function reloadDnsmasq(): Promise<void> {
-    await run('brew', ['services', 'restart', 'dnsmasq'], 'Restarting dnsmasq...', true);
-    // Flush macOS DNS cache
-    await run('dscacheutil', ['-flushcache'], undefined, true);
-    await run('killall', ['-HUP', 'mDNSResponder'], undefined, true);
 }
 
 async function resolveDnsmasqConfPath(): Promise<string> {

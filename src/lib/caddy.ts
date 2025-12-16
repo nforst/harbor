@@ -153,7 +153,7 @@ export async function assertPortsAvailable(): Promise<void> {
 export async function reloadCaddy(): Promise<void> {
     const caddyBin = path.join(await brewDir(), 'bin', 'caddy');
     const caddyFile = path.join(await brewDir(), 'etc', 'Caddyfile');
-    await run(caddyBin, ['reload', '--config', caddyFile], 'Reloading Caddy...', true);
+    await run(caddyBin, ['reload', '--config', caddyFile], 'Reloading Caddy...');
 }
 
 /**
