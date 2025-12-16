@@ -11,7 +11,7 @@ export function installCommand() {
     const cmd = new Command("install");
 
     cmd
-        .description("Installs and creates all necessary dependencies and configurations")
+        .description("Installs all dependencies. Use --tld <tld> to set the default TLD (e.g. --tld dev)")        
         .option("--tld <tld>", "TLD, e.g. test", "test")
         .action(async (opts) => {
             if (!isMac()) {

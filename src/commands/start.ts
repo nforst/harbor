@@ -6,7 +6,7 @@ export function startCommand() {
     const cmd = new Command("start");
 
     cmd
-        .description("Starts all Harbor services (Caddy, dnsmasq, PHP)")
+        .description("Starts all Harbor services (Caddy, dnsmasq, PHP). Use -r to force restart even if running.")
         .option("-r, --restart", "Restart services even if already running")
         .action(async (opts) => {
             const forceRestart = opts.restart === true;
