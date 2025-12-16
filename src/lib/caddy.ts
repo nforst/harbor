@@ -3,7 +3,7 @@ import path from "path";
 import { startService, stopService, listFormulas } from "./brew.js";
 import { brewDir, caddyDir, phpSocketPath } from "./paths.js";
 import { removeFileIfExists, writeFileIfChanged, readFileContent } from "./file-utils.js";
-import { run } from "./shell.js";
+import { run, runCapture } from "./shell.js";
 
 export default async function addCaddyFile(host: string, folder: string|null, proxy = false, proxyHost?: string) {
     let content;
@@ -77,6 +77,73 @@ export async function excludeCaddyImport() {
 export async function isCaddyInstalled(): Promise<boolean> {
     const formulas = await listFormulas();
     return formulas.includes('caddy');
+}
+
+export interface PortCheckResult {
+    port: number;
+    inUse: boolean;
+    process?: string;
+}
+
+/**
+ * Check if ports 80 and 443 are available.
+ * Returns info about which ports are in use and by what process.
+ */
+export async function checkRequiredPorts(): Promise<PortCheckResult[]> {
+    const ports = [80, 443];
+    const results: PortCheckResult[] = [];
+    
+    for (const port of ports) {
+        try {
+            // Use lsof to check if port is in use (listening)
+            const output = await runCapture('lsof', ['-i', `:${port}`, '-sTCP:LISTEN', '-t'], true);
+            const pids = output.trim().split('\n').filter(Boolean);
+            
+            if (pids.length > 0 && pids[0]) {
+                // Get process name for the first PID
+                const processName = await runCapture('ps', ['-p', pids[0], '-o', 'comm='], false);
+                results.push({
+                    port,
+                    inUse: true,
+                    process: processName.trim().split('/').pop() || 'unknown'
+                });
+            } else {
+                results.push({ port, inUse: false });
+            }
+        } catch {
+            // lsof returns non-zero if no process found - port is free
+            results.push({ port, inUse: false });
+        }
+    }
+    
+    return results;
+}
+
+/**
+ * Throws an error if required ports are in use by non-Caddy processes.
+ * Should be called before installing Harbor.
+ */
+export async function assertPortsAvailable(): Promise<void> {
+    const caddyInstalled = await isCaddyInstalled();
+    
+    // If Caddy is already installed, it's fine if it's using the ports
+    if (caddyInstalled) {
+        return;
+    }
+    
+    const portResults = await checkRequiredPorts();
+    const blockedPorts = portResults.filter(p => p.inUse);
+    
+    if (blockedPorts.length > 0) {
+        const details = blockedPorts
+            .map(p => `  - Port ${p.port} is used by: ${p.process}`)
+            .join('\n');
+        
+        throw new Error(
+            `Cannot install Harbor: required ports are already in use.\n${details}\n\n` +
+            `Please stop the conflicting services before running 'harbor install'.`
+        );
+    }
 }
 
 /**
