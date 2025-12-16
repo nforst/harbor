@@ -82,9 +82,6 @@ export async function isCaddyInstalled(): Promise<boolean> {
  * Restart Caddy with root privileges
  */
 export async function restartCaddy(): Promise<void> {
-    // Stop any existing Caddy service first (stopService handles sudo automatically)
-    await stopService('caddy');
-    // Start with sudo so Caddy can bind to ports 80 and 443
     await startService('caddy', true);
 }
 
