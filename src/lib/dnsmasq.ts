@@ -45,7 +45,7 @@ export async function implementDnsmasqImport() {
     const dnsmasqConfPath = await resolveDnsmasqConfPath();
     const current = await readFileContent(dnsmasqConfPath);
 
-    const importLine = `hostsdir=${ensureTrailingSlash(dnsmasqDir())},*.conf`;
+    const importLine = `conf-dir=${dnsmasqDir()},*.conf`;
 
     const exists = current
         .split("\n")
@@ -63,6 +63,43 @@ export async function implementDnsmasqImport() {
     ].join("\n");
 
     await writeFileSudoIfNeeded(dnsmasqConfPath, next);
+}
+
+/**
+ * Reload dnsmasq so new domains are immediately available.
+ * Uses launchctl kickstart which is allowed without password via sudoers.
+ */
+export async function reloadDnsmasq(): Promise<void> {
+    await run('sudo', ['/bin/launchctl', 'kickstart', '-k', 'system/homebrew.mxcl.dnsmasq'], 'Restarting dnsmasq...');
+}
+
+const SUDOERS_FILE = '/etc/sudoers.d/harbor';
+const SUDOERS_CONTENT = `# Harbor - allow dnsmasq restart without password
+%admin ALL=(ALL) NOPASSWD: /bin/launchctl kickstart -k system/homebrew.mxcl.dnsmasq
+`;
+
+/**
+ * Add sudoers rule to allow passwordless dnsmasq restart.
+ */
+export async function setupSudoersRule(): Promise<void> {
+    const tmpPath = '/tmp/harbor-sudoers';
+    await fs.writeFile(tmpPath, SUDOERS_CONTENT, { mode: 0o440 });
+    
+    // Validate the sudoers file before installing
+    await run('sudo', ['visudo', '-c', '-f', tmpPath], 'Validating sudoers rule...');
+    
+    // Install the sudoers file
+    await run('sudo', ['cp', tmpPath, SUDOERS_FILE], 'Installing sudoers rule for passwordless dnsmasq restart...');
+    await run('sudo', ['chmod', '440', SUDOERS_FILE], undefined);
+    
+    await fs.unlink(tmpPath).catch(() => {});
+}
+
+/**
+ * Remove the sudoers rule.
+ */
+export async function removeSudoersRule(): Promise<void> {
+    await run('sudo', ['rm', '-f', SUDOERS_FILE], 'Removing sudoers rule...');
 }
 
 async function resolveDnsmasqConfPath(): Promise<string> {

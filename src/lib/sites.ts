@@ -1,6 +1,6 @@
 import { ensureFqdn, isValidDomain, normalizeDomain } from "./domain.js";
 import { readConfig, writeConfig, type AppConfig, type LinkEntry } from "./config.js";
-import { removeDnsmasqConfig, addDnsmasqConfig } from "./dnsmasq.js";
+import {removeDnsmasqConfig, addDnsmasqConfig, reloadDnsmasq} from "./dnsmasq.js";
 import { removeHost, addHost } from "./resolver.js";
 import { removeCaddyFile, reloadCaddy } from "./caddy.js";
 import addCaddyFile from "./caddy.js";
@@ -13,6 +13,7 @@ export async function teardownSite(host: string): Promise<void> {
     await removeHost(host);
     await removeCaddyFile(host);
     await reloadCaddy();
+    await reloadDnsmasq()
 }
 
 /**
@@ -29,6 +30,7 @@ export async function setupSite(host: string, entry: LinkEntry): Promise<void> {
     }
     
     await reloadCaddy();
+    await reloadDnsmasq()
 }
 
 export async function removeSite(domain: string, expected: "link" | "proxy"): Promise<string> {

@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { harborHomeDir, isMac } from "../lib/paths.js";
 import { readConfig, writeConfig } from "../lib/config.js";
 import { excludeCaddyImport, removeCaddyFile } from "../lib/caddy.js";
-import { removeDnsmasqConfig } from "../lib/dnsmasq.js";
+import { removeDnsmasqConfig, removeSudoersRule } from "../lib/dnsmasq.js";
 import { removeHost } from "../lib/resolver.js";
 import { removeFileIfExists } from "../lib/file-utils.js";
 import { resolvePhpFpmConfigPath } from "../lib/php.js";
@@ -41,6 +41,9 @@ export function uninstallCommand() {
 
             // Remove Harbor from Caddy imports
             await excludeCaddyImport();
+
+            // Remove sudoers rule
+            await removeSudoersRule();
 
             // Remove Harbor home directory entirely
             await fs.rm(harborHomeDir(), { recursive: true, force: true });

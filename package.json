@@ -1,6 +1,6 @@
 {
   "name": "harbor",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "A lightweight macOS local dev tool that runs web projects without VMs or containers",
   "license": "ISC",
   "author": "Niklas Forst",

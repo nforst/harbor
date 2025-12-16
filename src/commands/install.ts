@@ -3,7 +3,7 @@ import { isMac } from "../lib/paths.js";
 import { readConfig, writeConfig } from "../lib/config.js";
 import { run } from "../lib/shell.js";
 import { setupPhpFpm } from "../lib/php.js";
-import { implementDnsmasqImport } from "../lib/dnsmasq.js";
+import { implementDnsmasqImport, setupSudoersRule } from "../lib/dnsmasq.js";
 import { setupCaddy, assertPortsAvailable } from "../lib/caddy.js";
 import { APP_VERSION } from "../lib/version.js";
 
@@ -25,6 +25,7 @@ export function installCommand() {
             cfg.tld = String(opts.tld || "test").replace(/^\./, "");
             
             await run("brew", ["install", "caddy", "dnsmasq"], 'Installing caddy, dnsmasq... (this may take a while)');
+            await setupSudoersRule();
             await setupCaddy();
             await implementDnsmasqImport()
             await run("brew", ["services", "restart", "dnsmasq"], 'Starting dnsmasq...', true);
