@@ -3,6 +3,7 @@ import path from "path";
 import { startService, stopService, listFormulas } from "./brew.js";
 import { brewDir, caddyDir, phpSocketPath } from "./paths.js";
 import { removeFileIfExists, writeFileIfChanged, readFileContent } from "./file-utils.js";
+import { run } from "./shell.js";
 
 export default async function addCaddyFile(host: string, folder: string|null, proxy = false, proxyHost?: string) {
     let content;
@@ -76,6 +77,16 @@ export async function excludeCaddyImport() {
 export async function isCaddyInstalled(): Promise<boolean> {
     const formulas = await listFormulas();
     return formulas.includes('caddy');
+}
+
+/**
+ * Reload Caddy configuration without full restart.
+ * This is faster than restart and picks up new site configs.
+ */
+export async function reloadCaddy(): Promise<void> {
+    const caddyBin = path.join(await brewDir(), 'bin', 'caddy');
+    const caddyFile = path.join(await brewDir(), 'etc', 'Caddyfile');
+    await run(caddyBin, ['reload', '--config', caddyFile], 'Reloading Caddy...', true);
 }
 
 /**

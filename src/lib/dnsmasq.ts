@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { runCapture } from "./shell.js";
+import { run, runCapture } from "./shell.js";
 import { readConfig } from "./config.js";
 import { dnsmasqDir } from "./paths.js";
 import { removeFileIfExists, writeFileIfChanged, writeFileSudoIfNeeded, readFileContent } from "./file-utils.js";
@@ -63,6 +63,16 @@ export async function implementDnsmasqImport() {
     ].join("\n");
 
     await writeFileSudoIfNeeded(dnsmasqConfPath, next);
+}
+
+/**
+ * Reload dnsmasq and flush macOS DNS cache so new domains are immediately available.
+ */
+export async function reloadDnsmasq(): Promise<void> {
+    await run('brew', ['services', 'restart', 'dnsmasq'], 'Restarting dnsmasq...', true);
+    // Flush macOS DNS cache
+    await run('dscacheutil', ['-flushcache'], undefined, true);
+    await run('killall', ['-HUP', 'mDNSResponder'], undefined, true);
 }
 
 async function resolveDnsmasqConfPath(): Promise<string> {
