@@ -1,0 +1,40 @@
+{
+  "name": "harbor",
+  "version": "1.0.0",
+  "description": "A lightweight macOS local dev tool that runs web projects without VMs or containers",
+  "license": "ISC",
+  "author": "Niklas Forst",
+  "type": "module",
+  "keywords": [
+    "macos",
+    "local-development",
+    "valet",
+    "php",
+    "caddy",
+    "dnsmasq"
+  ],
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "bin": {
+    "harbor": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc && npm run copy-assets",
+    "copy-assets": "mkdir -p dist/assets && cp -R src/assets/* dist/assets/"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.1.0",
+    "chokidar": "^5.0.0",
+    "commander": "^14.0.2",
+    "execa": "^9.6.1",
+    "ora": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
