@@ -33,6 +33,25 @@ export async function addHost(host: string) {
 }
 
 export async function removeHost(host: string) {
-    // Note: We don't remove the TLD resolver file because other sites might still use it
-    // The resolver file is only created per TLD, not per host
+    const cfg = readConfig();
+    const tld = extractTld(host);
+    
+    // Check if any other sites still use this TLD
+    const tldStillUsed = Object.values(cfg.links).some((entry) => {
+        if (entry.host === host) return false; // Skip the host we're removing
+        return extractTld(entry.host) === tld;
+    });
+    
+    if (tldStillUsed) {
+        return; // Other sites still use this TLD, keep the resolver
+    }
+    
+    // No other sites use this TLD, remove the resolver file
+    const resolverPath = `/etc/resolver/${tld}`;
+    
+    try {
+        await run("bash", ["-lc", `sudo rm -f '${resolverPath}'`], undefined);
+    } catch {
+        // Ignore errors if file doesn't exist
+    }
 }

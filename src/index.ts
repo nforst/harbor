@@ -9,6 +9,8 @@ import { proxyCommand } from "./commands/proxy.js";
 import { unproxyCommand } from "./commands/unproxy.js";
 import { tldCommand } from "./commands/tld.js";
 import { phpCommand } from "./commands/php.js";
+import { statusCommand } from "./commands/status.js";
+import { startCommand } from "./commands/start.js";
 import { isInstalled, APP_VERSION, needsVersionUpdate, checkForUpdate } from "./lib/version.js";
 import { readConfig, writeConfig } from "./lib/config.js";
 
@@ -28,8 +30,10 @@ program.addCommand(proxyCommand());
 program.addCommand(unproxyCommand());
 program.addCommand(tldCommand());
 program.addCommand(phpCommand());
+program.addCommand(statusCommand());
+program.addCommand(startCommand());
 
-const INSTALL_FREE = new Set(["install", "help"]);
+const INSTALL_FREE = new Set(["install", "help", "start", "status"]);
 
 program.hook("preAction", (thisCommand, actionCommand) => {
     const cmdName = String(actionCommand?.name?.() ?? "");
