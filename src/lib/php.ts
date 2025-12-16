@@ -1,4 +1,4 @@
-import type { AppConfig } from "./config.js";
+import { readConfig, type AppConfig } from "./config.js";
 import { getInstalledFormulaVersion, getPrefix, getServicesList, listFormulas, startService, stopService } from "./brew.js";
 import path from "path";
 import fs from "fs/promises";
@@ -26,7 +26,8 @@ export async function resolvePhpFpmConfigPath(cfg: AppConfig): Promise<string | 
     return path.join(phpDir, "php-fpm.d", "harbor-php-fpm.conf");
 }
 
-async function installSocket(phpDir: string): Promise<void> {
+async function installSocket(phpVersion: string, isolate = false): Promise<void> {
+    const phpDir = await getPhpDir(phpVersion);
     const phpFpmDir = path.join(phpDir, "php-fpm.d");
     await fs.mkdir(phpFpmDir, { recursive: true });
 
@@ -36,14 +37,20 @@ async function installSocket(phpDir: string): Promise<void> {
     const harborUser = os.userInfo().username;
     const harborHomePath = harborHomeDir();
 
+    // Use site-specific socket if phpVersion is provided
+    const sockPath = phpSocketPath(isolate ? phpVersion : undefined);
+    const poolName = isolate ? `harbor_${phpVersion}` : 'harbor';
+
     const content = template
         .replaceAll("HARBOR_USER", harborUser)
-        .replaceAll("HARBOR_HOME_PATH", harborHomePath);
+        .replace("HARBOR_SOCKET_PATH", sockPath)
+        .replace("HARBOR_POOL_NAME", poolName);
 
-    const targetPath = path.join(phpFpmDir, "harbor-php-fpm.conf");
+    // Use unique config name for isolated versions
+    const configName = isolate ? `harbor-php-fpm-${phpVersion}.conf` : "harbor-php-fpm.conf";
+    const targetPath = path.join(phpFpmDir, configName);
     await fs.writeFile(targetPath, content, "utf8");
 
-    const sockPath = phpSocketPath();
     await fs.mkdir(harborHomePath, { recursive: true });
 
     try {
@@ -82,7 +89,7 @@ export async function setupPhpFpm(cfg: AppConfig): Promise<AppConfig> {
         cfg = await setLatestPhpVersion(cfg);
     }
 
-    await installSocket(await getPhpDir(cfg.php.version as string));
+    await installSocket(cfg.php.version as string);
     await startService(cfg.php.formula as string, true);
 
     return cfg;
@@ -114,7 +121,7 @@ export async function getInstalledPhpVersions(): Promise<PhpCandidate[]> {
 export async function switchPhpVersion(cfg: AppConfig, newVersion: PhpCandidate): Promise<AppConfig> {
     const oldFormula = cfg.php.formula;
     const oldVersion = cfg.php.version;
-    
+
     // Nothing to do if already on this version
     if (oldFormula === newVersion.formula && oldVersion === newVersion.version) {
         return cfg;
@@ -125,7 +132,7 @@ export async function switchPhpVersion(cfg: AppConfig, newVersion: PhpCandidate)
     // Stop old PHP service if running
     if (oldFormula) {
         await stopService(oldFormula, servicesMap);
-        
+
         // Remove old PHP-FPM config
         const oldConfigPath = await resolvePhpFpmConfigPath(cfg);
         if (oldConfigPath) {
@@ -138,10 +145,126 @@ export async function switchPhpVersion(cfg: AppConfig, newVersion: PhpCandidate)
     cfg.php.formula = newVersion.formula;
 
     // Install new socket config
-    await installSocket(await getPhpDir(newVersion.version));
+    await installSocket(newVersion.version);
 
     // Start new PHP service
     await startService(newVersion.formula, true);
 
     return cfg;
+}
+
+/**
+ * Sets up an isolated PHP version for a specific site.
+ * Creates a separate PHP-FPM config with a unique socket for the given version.
+ */
+export async function setupIsolatedPhp(phpVersion: string): Promise<void> {
+    const candidates = await getInstalledPhpVersions();
+    const match = candidates.find(c => c.version === phpVersion);
+
+    if (!match) {
+        throw new Error(`PHP ${phpVersion} is not installed`);
+    }
+
+    const cfg = readConfig();
+    const phpDir = await getPhpDir(phpVersion);
+    const phpFpmDir = path.join(phpDir, "php-fpm.d");
+    const wwwConfPath = path.join(phpFpmDir, "www.conf");
+    const backupPath = path.join(phpFpmDir, "www.conf.backup");
+
+    // Only backup www.conf for non-global versions
+    if (phpVersion !== cfg.php.version) {
+        // Check if www.conf exists and back it up
+        try {
+            await fs.access(wwwConfPath);
+            // If backup already exists, don't overwrite
+            try {
+                await fs.access(backupPath);
+            } catch {
+                await fs.copyFile(wwwConfPath, backupPath);
+            }
+            // Remove the original www.conf to avoid conflicts
+            await fs.unlink(wwwConfPath);
+        } catch {
+            // www.conf does not exist, nothing to do
+        }
+    }
+
+    // Install isolated socket config with version-specific socket
+    await installSocket(phpVersion, true);
+
+    // Start the PHP-FPM service for this version
+    const configPath = path.join(phpDir, "php-fpm.d", `harbor-php-fpm-${phpVersion}.conf`);
+    let restartIfRunning = false;
+    if (phpVersion === cfg.php.version) {
+        try {
+            await fs.access(configPath);
+            restartIfRunning = false;
+        } catch {
+            restartIfRunning = true;
+        }
+    }
+    await startService(match.formula, restartIfRunning);
+}
+
+/**
+ * Checks if any site is using a specific PHP version.
+ * Returns true if the version is in use, false otherwise.
+ */
+function isPhpVersionInUse(cfg: AppConfig, phpVersion: string): boolean {
+    return Object.values(cfg.links).some(entry => {
+        if (entry.type === "link") {
+            return entry.phpVersion === phpVersion;
+        }
+        return false;
+    });
+}
+
+/**
+ * Cleans up isolated PHP config and socket if no site is using that version anymore.
+ * Should be called after removing a PHP version isolation from a site.
+ */
+export async function cleanupUnusedIsolatedPhp(cfg: AppConfig, phpVersion: string): Promise<void> {
+    // Check if any site is still using this version
+    if (isPhpVersionInUse(cfg, phpVersion)) {
+        return;
+    }
+
+    const candidates = await getInstalledPhpVersions();
+    const match = candidates.find(c => c.version === phpVersion);
+
+    if (!match) {
+        // Version not installed anymore, nothing to clean up
+        return;
+    }
+
+    const phpDir = await getPhpDir(phpVersion);
+    const phpFpmDir = path.join(phpDir, "php-fpm.d");
+    const configName = `harbor-php-fpm-${phpVersion}.conf`;
+    const configPath = path.join(phpFpmDir, configName);
+    const wwwConfPath = path.join(phpFpmDir, "www.conf");
+    const backupPath = path.join(phpFpmDir, "www.conf.backup");
+
+    // Remove PHP-FPM config
+    await removeFileIfExists(configPath);
+
+    // Restore www.conf from backup if it exists (only for non-global versions)
+    if (phpVersion !== cfg.php.version) {
+        try {
+            await fs.access(backupPath);
+            await fs.copyFile(backupPath, wwwConfPath);
+            await fs.unlink(backupPath);
+        } catch {
+            // No backup, nothing to restore
+        }
+    }
+
+    // Remove socket file
+    const sockPath = phpSocketPath(phpVersion);
+    await removeFileIfExists(sockPath);
+
+    // Stop the PHP-FPM service for this version (only if not global)
+    if (phpVersion !== cfg.php.version) {
+        const servicesMap = await getServicesList();
+        await stopService(match.formula, servicesMap);
+    }
 }

@@ -5,7 +5,7 @@ import { brewDir, caddyDir, phpSocketPath } from "./paths.js";
 import { removeFileIfExists, writeFileIfChanged, readFileContent } from "./file-utils.js";
 import { run, runCapture } from "./shell.js";
 
-export default async function addCaddyFile(host: string, folder: string|null, proxy = false, proxyHost?: string) {
+export default async function addCaddyFile(host: string, folder: string|null, proxy = false, proxyHost?: string, phpSocket?: string) {
     let content;
     if (proxy) {
         // proxyHost is just host:port (e.g., "localhost:3000")
@@ -14,9 +14,11 @@ export default async function addCaddyFile(host: string, folder: string|null, pr
             tls internal
           }`;
     } else {
+        // Use site-specific PHP socket if provided, otherwise use global
+        const socketPath = phpSocket || phpSocketPath();
         content = `${host} {
             root * ${folder}
-            php_fastcgi unix//${phpSocketPath()}
+            php_fastcgi unix//${socketPath}
             file_server
             tls internal
           }`;

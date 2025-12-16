@@ -12,6 +12,7 @@ import { phpCommand } from "./commands/php.js";
 import { statusCommand } from "./commands/status.js";
 import { startCommand } from "./commands/start.js";
 import { openCommand } from "./commands/open.js";
+import { isolateCommand } from "./commands/isolate.js";
 import { isInstalled, APP_VERSION, needsVersionUpdate, checkForUpdate } from "./lib/version.js";
 import { readConfig, writeConfig } from "./lib/config.js";
 
@@ -34,6 +35,7 @@ program.addCommand(phpCommand());
 program.addCommand(statusCommand());
 program.addCommand(startCommand());
 program.addCommand(openCommand());
+program.addCommand(isolateCommand());
 
 const INSTALL_FREE = new Set(["install", "help", "start", "status"]);
 

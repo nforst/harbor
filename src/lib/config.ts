@@ -3,7 +3,7 @@ import * as path from "path";
 import { configDir, configPath } from "./paths.js";
 
 export type LinkEntry =
-    | { type: "link"; host: string; root: string }
+    | { type: "link"; host: string; root: string; phpVersion?: string }
     | { type: "proxy"; host: string; target: string };
 
 export type AppConfig = {

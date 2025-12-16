@@ -24,7 +24,10 @@ export function dnsmasqDir(): string {
     return path.join(harborHomeDir(), "dnsmasq");
 }
 
-export function phpSocketPath(): string {
+export function phpSocketPath(version?: string): string {
+    if (version) {
+        return path.join(harborHomeDir(), `harbor-php-${version}.sock`);
+    }
     return path.join(harborHomeDir(), "harbor.sock");
 }
 
