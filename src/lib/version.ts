@@ -3,7 +3,7 @@ import type { AppConfig } from "./config.js";
 
 export const APP_VERSION = String((pkg as any).version ?? "0.0.0");
 
-const GITHUB_RELEASES_URL = "https://api.github.com/repos/nforst/harbor/releases/latest";
+const GITHUB_TAGS_URL = "https://api.github.com/repos/nforst/harbor/tags";
 
 export function isInstalled(cfg: AppConfig): boolean {
     return !!(String(cfg.installVersion ?? "").trim());
@@ -40,7 +40,7 @@ export function needsVersionUpdate(cfg: AppConfig): boolean {
 }
 
 /**
- * Fetch the latest version from GitHub releases.
+ * Fetch the latest version from GitHub tags.
  * Returns null if the check fails (network error, etc.)
  */
 async function fetchLatestVersion(): Promise<string | null> {
@@ -48,7 +48,7 @@ async function fetchLatestVersion(): Promise<string | null> {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000); // 3 second timeout
         
-        const response = await fetch(GITHUB_RELEASES_URL, {
+        const response = await fetch(GITHUB_TAGS_URL, {
             signal: controller.signal,
             headers: { 'Accept': 'application/vnd.github.v3+json' }
         });
@@ -57,8 +57,19 @@ async function fetchLatestVersion(): Promise<string | null> {
         
         if (!response.ok) return null;
         
-        const data = await response.json() as { tag_name?: string };
-        return data.tag_name ?? null;
+        const data = await response.json() as Array<{ name?: string }>;
+        
+        // Find the latest semver tag (tags starting with 'v')
+        const versionTags = data
+            .map(t => t.name)
+            .filter((name): name is string => !!name && /^v?\d+\.\d+\.\d+$/.test(name))
+            .sort((a, b) => {
+                const semA = parseSemver(a);
+                const semB = parseSemver(b);
+                return compareSemver(semB, semA); // Descending order
+            });
+        
+        return versionTags[0] ?? null;
     } catch {
         // Silently fail - don't bother user with network errors
         return null;
